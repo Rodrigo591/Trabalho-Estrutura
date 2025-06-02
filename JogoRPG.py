@@ -251,7 +251,6 @@ def main():
     arvore_inimigos.inserir(Inimigo("Orc", 3))
     arvore_inimigos.inserir(Inimigo("Troll", 2))
 
-    print("=== RPG Simples com Árvore Binária de Busca, Skill Tree com grafos e D20 ===\n")
 
     while jogador.esta_vivo():
         inimigo = arvore_inimigos.buscar_por_nivel(jogador.nivel)
