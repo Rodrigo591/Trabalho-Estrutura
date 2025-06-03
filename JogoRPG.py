@@ -146,10 +146,9 @@ class Inimigo(Personagem):
 
 class NodoInimigo:
     def __init__(self, inimigo: Inimigo):
-        self.inimigo = inimigo
+        self.inimigos = [inimigo]  # lista de inimigos com o mesmo nível
         self.esquerda: Optional['NodoInimigo'] = None
         self.direita: Optional['NodoInimigo'] = None
-
 
 class ArvoreBinariaDeBuscaInimigos:
     def __init__(self):
@@ -162,26 +161,29 @@ class ArvoreBinariaDeBuscaInimigos:
             self._inserir_nodo(self.raiz, inimigo)
 
     def _inserir_nodo(self, nodo: NodoInimigo, inimigo: Inimigo):
-        if inimigo.nivel < nodo.inimigo.nivel:
+        if inimigo.nivel < nodo.inimigos[0].nivel:
             if nodo.esquerda is None:
                 nodo.esquerda = NodoInimigo(inimigo)
             else:
                 self._inserir_nodo(nodo.esquerda, inimigo)
-        else:
+        elif inimigo.nivel > nodo.inimigos[0].nivel:
             if nodo.direita is None:
                 nodo.direita = NodoInimigo(inimigo)
             else:
                 self._inserir_nodo(nodo.direita, inimigo)
+        else:
+            # mesmo nível -> adiciona na lista de inimigos desse nodo
+            nodo.inimigos.append(inimigo)
 
-    def buscar_por_nivel(self, nivel: int) -> Optional[Inimigo]:
+    def buscar_por_nivel(self, nivel: int) -> Optional[List[Inimigo]]:
         return self._buscar_nodo(self.raiz, nivel)
 
-    def _buscar_nodo(self, nodo: Optional[NodoInimigo], nivel: int) -> Optional[Inimigo]:
+    def _buscar_nodo(self, nodo: Optional[NodoInimigo], nivel: int) -> Optional[List[Inimigo]]:
         if nodo is None:
             return None
-        if nivel == nodo.inimigo.nivel:
-            return nodo.inimigo
-        elif nivel < nodo.inimigo.nivel:
+        if nivel == nodo.inimigos[0].nivel:
+            return nodo.inimigos  # retorna a lista completa de inimigos daquele nível
+        elif nivel < nodo.inimigos[0].nivel:
             return self._buscar_nodo(nodo.esquerda, nivel)
         else:
             return self._buscar_nodo(nodo.direita, nivel)
@@ -248,36 +250,41 @@ def main():
 
     arvore_inimigos = ArvoreBinariaDeBuscaInimigos()
     arvore_inimigos.inserir(Inimigo("Goblin", 1))
-    arvore_inimigos.inserir(Inimigo("Orc", 3))
+    arvore_inimigos.inserir(Inimigo("Slime", 1))
     arvore_inimigos.inserir(Inimigo("Troll", 2))
+    arvore_inimigos.inserir(Inimigo("Orc", 2))
 
+    nivel_atual = jogador.nivel
 
     while jogador.esta_vivo():
-        inimigo = arvore_inimigos.buscar_por_nivel(jogador.nivel)
-        if inimigo is None:
+        inimigos_do_nivel = arvore_inimigos.buscar_por_nivel(nivel_atual)
+        if not inimigos_do_nivel:
             print("Não há inimigos para o seu nível. Você venceu o jogo!")
             break
 
-        print(f"Inimigo encontrado: {inimigo.nome} (Nível {inimigo.nivel})")
+        print(f"\n--- Iniciando combates do nível {nivel_atual} ---")
 
-        while jogador.esta_vivo() and inimigo.esta_vivo():
-            input("Pressione ENTER para atacar...")  # interação do usuário fora do método
-            jogador.atacar_alvo_com_d20(inimigo)
-            if inimigo.esta_vivo():
-                inimigo.atacar_alvo_com_d20(jogador)
-            else:
-                print(f"{inimigo.nome} foi derrotado!")
-                jogador.subir_de_nivel()
+        for inimigo in inimigos_do_nivel:
+            print(f"Inimigo encontrado: {inimigo.nome} (Nível {inimigo.nivel})")
 
-                interagir_com_arvore_de_habilidades(jogador)
-                break
+            while jogador.esta_vivo() and inimigo.esta_vivo():
+                input("Pressione ENTER para atacar...")
+                jogador.atacar_alvo_com_d20(inimigo)
+                if inimigo.esta_vivo():
+                    inimigo.atacar_alvo_com_d20(jogador)
+                else:
+                    print(f"{inimigo.nome} foi derrotado!")
 
-        if not jogador.esta_vivo():
-            print(f"{jogador.nome} morreu. Fim de jogo.")
-            break
+            if not jogador.esta_vivo():
+                print(f"{jogador.nome} morreu. Fim de jogo.")
+                return
+
+        # Depois de derrotar TODOS os inimigos do nível atual, sobe de nível e atualiza o nível_atual
+        jogador.subir_de_nivel()
+        interagir_com_arvore_de_habilidades(jogador)
+        nivel_atual = jogador.nivel  # atualiza para o próximo nível
 
         print("--------------\n")
-
 
 if __name__ == "__main__":
     main()
