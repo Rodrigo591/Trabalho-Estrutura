@@ -57,7 +57,7 @@ class Personagem:
 
 class Jogador(Personagem):
     def __init__(self, nome: str):
-        super().__init__(nome, nivel=1, hp_max=100, ataque=10)
+        super().__init__(nome, nivel=1, hp_max=500, ataque=10)
         self.arvore_de_habilidades = ArvoreDeHabilidades()
 
     def subir_de_nivel(self):
@@ -103,8 +103,6 @@ class Jogador(Personagem):
         print('=======================')
 
 
-
-
 class Inimigo(Personagem):
     def __init__(self, nome: str, nivel: int):
         hp_max = 30 + (nivel - 1) * 20
@@ -140,15 +138,13 @@ class Inimigo(Personagem):
         print('\033[31m=======================\033[0m')
 
 
-
-
-# Inicio da Arvore Binaria para filtrar os inimigos por nivel de dificuldade
-
+# Nodo da árvore binária que armazena inimigos do mesmo nível
 class NodoInimigo:
     def __init__(self, inimigo: Inimigo):
         self.inimigos = [inimigo]  # lista de inimigos com o mesmo nível
         self.esquerda: Optional['NodoInimigo'] = None
         self.direita: Optional['NodoInimigo'] = None
+
 
 class ArvoreBinariaDeBuscaInimigos:
     def __init__(self):
@@ -189,8 +185,26 @@ class ArvoreBinariaDeBuscaInimigos:
             return self._buscar_nodo(nodo.direita, nivel)
 
 
-# Inicio do Grafo para a arvore de habildiades
+# Função para buscar o próximo nível maior com inimigos na árvore
+def buscar_proximo_nivel_maior(nodo: Optional[NodoInimigo], nivel: int) -> Optional[List[Inimigo]]:
+    if nodo is None:
+        return None
 
+    nodo_nivel = nodo.inimigos[0].nivel
+
+    if nodo_nivel <= nivel:
+        # buscar na subárvore direita para achar nível maior
+        return buscar_proximo_nivel_maior(nodo.direita, nivel)
+    else:
+        # nodo_nivel > nivel
+        esquerda = buscar_proximo_nivel_maior(nodo.esquerda, nivel)
+        if esquerda is not None:
+            return esquerda
+        else:
+            return nodo.inimigos
+
+
+# Inicio do Grafo para a arvore de habildiades
 class ArvoreDeHabilidades:
     def __init__(self):
         # Grafo representando a skill tree (lista de adjacências)
@@ -226,7 +240,8 @@ def interagir_com_arvore_de_habilidades(jogador: Jogador):
         for habilidade, filhos in jogador.arvore_de_habilidades.grafo.items():
             status = "✅" if habilidade in jogador.arvore_de_habilidades.habilidades_aprendidas else "❌"
             prereqs = [pai for pai, kids in jogador.arvore_de_habilidades.grafo.items() if habilidade in kids]
-            prereq_status = "OK" if all(pr in jogador.arvore_de_habilidades.habilidades_aprendidas for pr in prereqs) else "Bloqueado"
+            prereq_status = "OK" if all(
+                pr in jogador.arvore_de_habilidades.habilidades_aprendidas for pr in prereqs) else "Bloqueado"
             print(f" - {habilidade}: {status} (Pré-requisitos: {prereqs if prereqs else 'Nenhum'}) [{prereq_status}]")
 
         escolha = input("Digite o nome da habilidade que deseja aprender (ou 'sair' para continuar): ").strip()
@@ -253,16 +268,26 @@ def main():
     arvore_inimigos.inserir(Inimigo("Slime", 1))
     arvore_inimigos.inserir(Inimigo("Troll", 2))
     arvore_inimigos.inserir(Inimigo("Orc", 2))
+    arvore_inimigos.inserir(Inimigo("Dragão", 5))
 
     nivel_atual = jogador.nivel
 
     while jogador.esta_vivo():
         inimigos_do_nivel = arvore_inimigos.buscar_por_nivel(nivel_atual)
-        if not inimigos_do_nivel:
-            print("Não há inimigos para o seu nível. Você venceu o jogo!")
-            break
 
-        print(f"\n--- Iniciando combates do nível {nivel_atual} ---")
+        # Se não tiver inimigos do nível atual, tenta pegar o próximo maior
+        if inimigos_do_nivel is None:
+            inimigos_do_nivel = buscar_proximo_nivel_maior(arvore_inimigos.raiz, nivel_atual)
+            if inimigos_do_nivel is None:
+                print("Você derrotou todos os inimigos! Fim do jogo.")
+                break
+            else:
+                fator = inimigos_do_nivel[0].nivel / nivel_atual
+                print(f"\nCUIDADO: inimigo é {fator:.1f} vezes mais forte que você!")
+                # Não sobe o nível do jogador automaticamente, só troca o inimigo pra mais forte
+                nivel_atual = inimigos_do_nivel[0].nivel
+
+        print(f"\n--- Iniciando combates do nível {inimigos_do_nivel[0].nivel} ---")
 
         for inimigo in inimigos_do_nivel:
             print(f"Inimigo encontrado: {inimigo.nome} (Nível {inimigo.nivel})")
@@ -270,19 +295,31 @@ def main():
             while jogador.esta_vivo() and inimigo.esta_vivo():
                 input("Pressione ENTER para atacar...")
                 jogador.atacar_alvo_com_d20(inimigo)
-                if inimigo.esta_vivo():
-                    inimigo.atacar_alvo_com_d20(jogador)
-                else:
+                if not inimigo.esta_vivo():
                     print(f"{inimigo.nome} foi derrotado!")
+                    break
 
-            if not jogador.esta_vivo():
-                print(f"{jogador.nome} morreu. Fim de jogo.")
-                return
+                inimigo.atacar_alvo_com_d20(jogador)
+                if not jogador.esta_vivo():
+                    print(f"{jogador.nome} morreu. Fim de jogo.")
+                    return
 
-        # Depois de derrotar TODOS os inimigos do nível atual, sobe de nível e atualiza o nível_atual
+
         jogador.subir_de_nivel()
         interagir_com_arvore_de_habilidades(jogador)
-        nivel_atual = jogador.nivel  # atualiza para o próximo nível
+
+
+        proximo_nivel = nivel_atual + 1
+        if arvore_inimigos.buscar_por_nivel(proximo_nivel) is not None:
+            nivel_atual = proximo_nivel
+        else:
+
+            prox_maior = buscar_proximo_nivel_maior(arvore_inimigos.raiz, nivel_atual)
+            if prox_maior is not None:
+                nivel_atual = prox_maior[0].nivel
+            else:
+                print("Você derrotou todos os inimigos! Fim do jogo.")
+                break
 
         print("--------------\n")
 
